@@ -74,9 +74,9 @@ VALID_VERDICTS = ("safe", "leaky", "debatable", "not_a_feature")
 # spending happens. Keep that timeline in mind.
 # ---------------------------------------------------------------------------
 FEATURE_AUDIT: dict[str, tuple[str, str]] = {
-    "age_bucket": ("TODO", ""),
-    "sex": ("TODO", ""),
-    "region": ("TODO", ""),
+    "age_bucket": ("safe", "Part of the client data, precursor information to be a client."),
+    "sex": ("safe", "Part of the client data, precursor information to be a client."),
+    "region": ("safe", "Part of the client data, precursor information to be a client."),
     "total_claims": ("TODO", ""),
     "medical_claims": ("TODO", ""),
     "pharmacy_claims": ("TODO", ""),
@@ -112,7 +112,9 @@ def approved_claims(claims: pd.DataFrame) -> pd.DataFrame:
 
     Roughly 8% of claims are denied, so this line changes your numbers.
     """
-    raise NotImplementedError("Implement approved_claims()")
+    approvedClaims = claims[claims["adjudication_status"] == "approved"]
+    return approvedClaims
+    #raise NotImplementedError("Implement approved_claims()")
 
 
 def build_member_features(members: pd.DataFrame, claims: pd.DataFrame) -> pd.DataFrame:
@@ -146,7 +148,15 @@ def build_member_features(members: pd.DataFrame, claims: pd.DataFrame) -> pd.Dat
         for them. Should their total_claims be NaN, or 0? Whatever you choose,
         the column dtypes should still be numeric.
     """
-    raise NotImplementedError("Implement build_member_features()")
+    groupedClaims = claims.groupby("member_id").agg(total_claims=("claim_id", "count"), total_billed_cents=("billed_cents", "sum")
+                                                    ,total_allowed_cents=("allowed_cents", "sum"), total_plan_paid_cents=("plan_paid_cents", "sum")
+                                                    ,total_oop_cents=("out_of_pocket_cents", "sum"), medical_claims=("is_pharmacy", lambda a: (a == False).sum())
+                                                    ,pharmacy_claims=("is_pharmacy", lambda b: (b == True).sum()), specialty_drug_fills=("is_specialty_drug", lambda c: (c == True).sum())
+                                                    ,has_specialty_drug=("is_specialty_drug", lambda d: d.any()), inpatient_claims=("claim_type", lambda e: (e == "Institutional").sum())
+                                                    ,unique_diagnosis_codes=("diagnosis_code", lambda f: f[f != ""].nunique()))
+    groupedClaims = groupedClaims.reset_index()
+    groupedMembers = members.merge(groupedClaims, on="member_id", how="left")
+    # raise NotImplementedError("Implement build_member_features()")
 
 
 def add_label(features: pd.DataFrame) -> pd.DataFrame:
