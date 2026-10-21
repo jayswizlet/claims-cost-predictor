@@ -156,6 +156,7 @@ def build_member_features(members: pd.DataFrame, claims: pd.DataFrame) -> pd.Dat
                                                     ,unique_diagnosis_codes=("diagnosis_code", lambda f: f[f != ""].nunique()))
     groupedClaims = groupedClaims.reset_index()
     groupedMembers = members.merge(groupedClaims, on="member_id", how="left")
+    return groupedMembers
     # raise NotImplementedError("Implement build_member_features()")
 
 
