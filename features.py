@@ -171,7 +171,9 @@ def add_label(features: pd.DataFrame) -> pd.DataFrame:
     Write the one line that creates the label, then look hard at which column
     you just used. You will need that thought in TODO 4.
     """
-    raise NotImplementedError("Implement add_label()")
+    features["is_high_cost"] = (features["total_plan_paid_cents"] > HIGH_COST_THRESHOLD_CENTS).astype(int)
+    return features
+    #raise NotImplementedError("Implement add_label()")
 
 
 def model_features() -> list[str]:
