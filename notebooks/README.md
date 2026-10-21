@@ -26,3 +26,6 @@ Two habits worth having from the start:
 Write your assigned seed here so you don't lose it:
 
     STUDENT_SEED = 4
+
+##Week 1: Initial Commit
+Assigned Seed: 4
