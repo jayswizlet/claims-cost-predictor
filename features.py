@@ -74,12 +74,12 @@ VALID_VERDICTS = ("safe", "leaky", "debatable", "not_a_feature")
 # spending happens. Keep that timeline in mind.
 # ---------------------------------------------------------------------------
 FEATURE_AUDIT: dict[str, tuple[str, str]] = {
-    "age_bucket": ("safe", "Part of the client data, precursor information to be a client."),
-    "sex": ("safe", "Part of the client data, precursor information to be a client."),
-    "region": ("safe", "Part of the client data, precursor information to be a client."),
-    "total_claims": ("TODO", ""),
-    "medical_claims": ("TODO", ""),
-    "pharmacy_claims": ("TODO", ""),
+    "age_bucket": ("safe", "Part of the client data, precursor information to be a client. Known at enrollment before the year begins"),
+    "sex": ("safe", "Part of the client data, precursor information to be a client. Known at enrollment before the year begins"),
+    "region": ("safe", "Part of the client data, precursor information to be a client. Known at enrollment before the year begins"),
+    "total_claims": ("debatable", "would have partially filled information for the year, doesn't exactly restate the outcome, so on prediction day, there would be a gap from now til the EOY. However I would include it because it could be a strong pattern/signal of someone how is higher risk when the data is avaiable."),
+    "medical_claims": ("debatable", "similarly to total_claims, there still lies a gap from prediction day to EOY, where we won't know the full count til EOY, thus can be excluded because it'll be a subset of total_claims (tells which of claim is in pharmacy or not)"),
+    "pharmacy_claims": ("debatable", "similarly to total_claims, there still lies a gap from prediction day to EOY, where we won't know the full count til EOY, thus can be excluded because it'll be a subset of total_claims (tells which of claim is in pharmacy or not)"),
     "specialty_drug_fills": ("TODO", ""),
     "total_billed_cents": ("TODO", ""),
     "total_allowed_cents": ("TODO", ""),
