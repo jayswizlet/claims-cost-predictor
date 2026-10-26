@@ -74,21 +74,21 @@ VALID_VERDICTS = ("safe", "leaky", "debatable", "not_a_feature")
 # spending happens. Keep that timeline in mind.
 # ---------------------------------------------------------------------------
 FEATURE_AUDIT: dict[str, tuple[str, str]] = {
-    "age_bucket": ("TODO", ""),
-    "sex": ("TODO", ""),
-    "region": ("TODO", ""),
-    "total_claims": ("TODO", ""),
-    "medical_claims": ("TODO", ""),
-    "pharmacy_claims": ("TODO", ""),
-    "specialty_drug_fills": ("TODO", ""),
-    "total_billed_cents": ("TODO", ""),
-    "total_allowed_cents": ("TODO", ""),
-    "total_plan_paid_cents": ("TODO", ""),
-    "total_oop_cents": ("TODO", ""),
-    "unique_diagnosis_codes": ("TODO", ""),
-    "inpatient_claims": ("TODO", ""),
-    "has_specialty_drug": ("TODO", ""),
-    "is_high_cost": ("TODO", ""),
+    "age_bucket": ("safe", "Part of the client data, precursor information to be a client. Known at enrollment before the year begins"),
+    "sex": ("safe", "Part of the client data, precursor information to be a client. Known at enrollment before the year begins"),
+    "region": ("safe", "Part of the client data, precursor information to be a client. Known at enrollment before the year begins"),
+    "total_claims": ("debatable", "would have partially filled information for the year, doesn't exactly restate the outcome, so on prediction day, there would be a gap from now til the EOY. However I would include it because it could be a strong pattern/signal of someone how is higher risk when the data is avaiable."),
+    "medical_claims": ("debatable", "similarly to total_claims, there still lies a gap from prediction day to EOY, where we won't know the full count til EOY, thus can be excluded because it'll be a subset of total_claims (tells which of claim is in pharmacy or not) and we would lean toward using total claims (so it would be a bit leaky/double count)"),
+    "pharmacy_claims": ("debatable", "similarly to total_claims, there still lies a gap from prediction day to EOY, where we won't know the full count til EOY, thus can be excluded because it'll be a subset of total_claims (tells which of claim is in pharmacy or not) and we would lean toward using total claims (so it would be a bit leaky/double count)"),
+    "specialty_drug_fills": ("debatable", "would lean toward using because specialty drugs would be more expensive than a normal medication, thus could be an indicator of potential high cost individuals due to their medication"),
+    "total_billed_cents": ("leaky", "Directly the plan paid by the members themselves -> could be a restatement of the outcome of the cost of the individual"),
+    "total_allowed_cents": ("leaky", "Directly the plan paid by the members themselves -> could be a restatement of the outcome of the cost of the individua"),
+    "total_plan_paid_cents": ("leaky", "Directly the plan paid by the members themselves -> could be a restatement of the outcome of the cost of the individua"),
+    "total_oop_cents": ("leaky", "Directly the plan paid by the members themselves -> could be a restatement of the outcome of the cost of the individua"),
+    "unique_diagnosis_codes": ("debatable", "could be a signal for their health condition, however it only shows what has been seen this year. Last year's data should be a stronger signal. Would lean toward excluding in the model, as it doesn't entirely give a strong signal for our model due the possibility of incomplete the weight of each possible diagnosis (not all codes are weighted equally) "),
+    "inpatient_claims": ("safe", "would be good to use, as inpatient care (i.e hospital visits) are generally high-cost and thus having a count of these claims is a strong signal we can use for the model"),
+    "has_specialty_drug": ("safe", "modeled as a boolean value, specialty drugs is generally more expensive thus could be a useful signal for an individual being more expensive"),
+    "is_high_cost": ("debatable", "this is what we are trying to predict with the model, can't be computed on prediction day, as it is what we're looking for with the model."),
 }
 
 
@@ -112,7 +112,9 @@ def approved_claims(claims: pd.DataFrame) -> pd.DataFrame:
 
     Roughly 8% of claims are denied, so this line changes your numbers.
     """
-    raise NotImplementedError("Implement approved_claims()")
+    approvedClaims = claims[claims["adjudication_status"] == "approved"]
+    return approvedClaims
+    #raise NotImplementedError("Implement approved_claims()")
 
 
 def build_member_features(members: pd.DataFrame, claims: pd.DataFrame) -> pd.DataFrame:
@@ -146,7 +148,23 @@ def build_member_features(members: pd.DataFrame, claims: pd.DataFrame) -> pd.Dat
         for them. Should their total_claims be NaN, or 0? Whatever you choose,
         the column dtypes should still be numeric.
     """
-    raise NotImplementedError("Implement build_member_features()")
+    groupedClaims = claims.groupby("member_id").agg(total_claims=("claim_id", "count"), total_billed_cents=("billed_cents", "sum")
+                                                    ,total_allowed_cents=("allowed_cents", "sum"), total_plan_paid_cents=("plan_paid_cents", "sum")
+                                                    ,total_oop_cents=("out_of_pocket_cents", "sum"), medical_claims=("is_pharmacy", lambda a: (a == False).sum())
+                                                    ,pharmacy_claims=("is_pharmacy", lambda b: (b == True).sum()), specialty_drug_fills=("is_specialty_drug", lambda c: (c == True).sum())
+                                                    ,has_specialty_drug=("is_specialty_drug", lambda d: d.any()), inpatient_claims=("claim_type", lambda e: (e == "Institutional").sum())
+                                                    ,unique_diagnosis_codes=("diagnosis_code", lambda f: f[f != ""].nunique()))
+    groupedClaims = groupedClaims.reset_index()
+    groupedMembers = members.merge(groupedClaims, on="member_id", how="left")
+    count_and_money = [
+    "total_claims", "medical_claims", "pharmacy_claims", "specialty_drug_fills",
+    "inpatient_claims", "unique_diagnosis_codes",
+    "total_billed_cents", "total_allowed_cents", "total_plan_paid_cents", "total_oop_cents",
+    ]
+    groupedMembers[count_and_money] = groupedMembers[count_and_money].fillna(0).astype(int)
+    groupedMembers["has_specialty_drug"] = groupedMembers["has_specialty_drug"].fillna(False).astype(bool)
+    return groupedMembers
+    # raise NotImplementedError("Implement build_member_features()")
 
 
 def add_label(features: pd.DataFrame) -> pd.DataFrame:
@@ -160,7 +178,9 @@ def add_label(features: pd.DataFrame) -> pd.DataFrame:
     Write the one line that creates the label, then look hard at which column
     you just used. You will need that thought in TODO 4.
     """
-    raise NotImplementedError("Implement add_label()")
+    features["is_high_cost"] = (features["total_plan_paid_cents"] > HIGH_COST_THRESHOLD_CENTS).astype(int)
+    return features
+    #raise NotImplementedError("Implement add_label()")
 
 
 def model_features() -> list[str]:
@@ -171,7 +191,13 @@ def model_features() -> list[str]:
     changing a verdict above changes what the model sees. Decide for yourself
     whether "debatable" columns are in or out, and be ready to defend it.
     """
-    raise NotImplementedError("Implement model_features()")
+    debatableAccepted = ["total_claims", "specialy_drug_fills"]
+    featureList = [] + debatableAccepted
+    for features in FEATURE_AUDIT:
+        if FEATURE_AUDIT[features][0] == "safe":
+            featureList.append(features)
+    return featureList
+    # raise NotImplementedError("Implement model_features()")
 
 
 def print_audit() -> None:
