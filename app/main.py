@@ -23,7 +23,7 @@ from app.schemas import MemberFeatures, PredictionResponse
 from config import HIGH_COST_THRESHOLD_USD
 
 MODEL_PATH = Path("model.joblib")
-DECISION_THRESHOLD = 0.5  # the threshold you defended in Week 5
+DECISION_THRESHOLD = 0.2  # the threshold you defended in Week 5
 
 model = None
 
