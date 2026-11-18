@@ -88,7 +88,7 @@ FEATURE_AUDIT: dict[str, tuple[str, str]] = {
     "unique_diagnosis_codes": ("debatable", "could be a signal for their health condition, however it only shows what has been seen this year. Last year's data should be a stronger signal. Would lean toward excluding in the model, as it doesn't entirely give a strong signal for our model due the possibility of incomplete the weight of each possible diagnosis (not all codes are weighted equally) "),
     "inpatient_claims": ("safe", "would be good to use, as inpatient care (i.e hospital visits) are generally high-cost and thus having a count of these claims is a strong signal we can use for the model"),
     "has_specialty_drug": ("safe", "modeled as a boolean value, specialty drugs is generally more expensive thus could be a useful signal for an individual being more expensive"),
-    "is_high_cost": ("debatable", "this is what we are trying to predict with the model, can't be computed on prediction day, as it is what we're looking for with the model."),
+    "is_high_cost": ("not_a_feature", "this is the label we are trying to predict; it can't be known on prediction day, so it can never be an input."),
 }
 
 
@@ -191,7 +191,7 @@ def model_features() -> list[str]:
     changing a verdict above changes what the model sees. Decide for yourself
     whether "debatable" columns are in or out, and be ready to defend it.
     """
-    debatableAccepted = ["total_claims", "specialy_drug_fills"]
+    debatableAccepted = ["total_claims", "specialty_drug_fills"]
     featureList = [] + debatableAccepted
     for features in FEATURE_AUDIT:
         if FEATURE_AUDIT[features][0] == "safe":
