@@ -1,28 +1,19 @@
 """
-WEEK 6 STARTER — audit the model across demographic groups.
+Audit the model's decisions across demographic groups.
 
-The model is one number per member. A fairness audit asks whether that number
-is equally wrong for everybody, and "equally wrong" turns out to have several
-mutually incompatible definitions.
+Reports per-group rates for sex and age_bucket, applies the four-fifths rule,
+compares against a model retrained without the demographic columns, and writes
+reports/fairness_report.md.
 
-Fill in every section marked TODO. When you run this file it should:
-  1. Score every member with the trained model
-  2. Report per-group rates for sex and age_bucket
-  3. Apply the 80% rule
-  4. Compare against a model retrained without the demographic columns
-  5. Write reports/fairness_report.md
-
-Run:
     python fairness.py
-
-Check your work:
-    pytest tests/test_fairness.py -v
 """
 
 import joblib
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from sklearn.base import clone
+from sklearn.model_selection import train_test_split
 
 from config import HIGH_COST_THRESHOLD_USD
 
@@ -30,37 +21,33 @@ DATA_PATH = Path("data/member_summary.csv")
 MODEL_PATH = Path("model.joblib")
 REPORT_PATH = Path("reports/fairness_report.md")
 
-PROTECTED_COLUMNS = ["sex", "age_bucket"]
-DECISION_THRESHOLD = 0.5  # swap in the threshold you defended in Week 5
+# Must match train.py so the blind model is fitted on the same training rows.
+TEST_SIZE = 0.2
+RANDOM_STATE = 42
 
-# ---------------------------------------------------------------------------
-# TODO 6 — your written assessment.
-#
-# After you have the numbers, fill this in. It is graded on whether the claim
-# follows from your own cohort's numbers, not on whether it is reassuring.
-# Reference specific rates. Name the group that is worse off. If a subgroup is
-# too small to conclude anything, say that instead of reporting a ratio to two
-# decimal places as if it meant something.
-# ---------------------------------------------------------------------------
+PROTECTED_COLUMNS = ["sex", "age_bucket"]
+DECISION_THRESHOLD = 0.2  # keep in sync with evaluate.CHOSEN_THRESHOLD
+
+# TODO: write the assessment from this cohort's numbers.
 ASSESSMENT = ""
 
 
 def confusion_counts(y_true, y_pred) -> dict[str, int]:
-    """
-    TODO 1 — return {"tp": .., "fp": .., "fn": .., "tn": ..}.
-
-    Write it with vectorized comparisons rather than a loop. Both inputs are
-    0/1 arrays or Series.
-    """
-    raise NotImplementedError("Implement confusion_counts()")
+    """Return {"tp", "fp", "fn", "tn"} counts for 0/1 labels and predictions."""
+    y_true = np.asarray(y_true).astype(int)
+    y_pred = np.asarray(y_pred).astype(int)
+    return {
+        "tp": int(np.sum((y_true == 1) & (y_pred == 1))),
+        "fp": int(np.sum((y_true == 0) & (y_pred == 1))),
+        "fn": int(np.sum((y_true == 1) & (y_pred == 0))),
+        "tn": int(np.sum((y_true == 0) & (y_pred == 0))),
+    }
 
 
 def group_metrics(df: pd.DataFrame, group_col: str,
                   y_true_col: str = "y_true", y_pred_col: str = "y_pred") -> pd.DataFrame:
     """
-    TODO 2 — one row per group value, with these columns:
-
-        group, n, base_rate, positive_rate, tpr, fpr, fnr, precision
+    One row per group, sorted by group:
 
         n              members in the group
         base_rate      share of the group that is actually high-cost
@@ -70,54 +57,86 @@ def group_metrics(df: pd.DataFrame, group_col: str,
         fnr            1 - tpr; the members the model misses
         precision      of the flagged, share actually high-cost
 
-    Build it on top of confusion_counts(). Sort by group so the output is stable
-    across runs. Guard the divisions: a group with zero actual positives has no
-    TPR, and reporting 0.0 there is a lie — use np.nan.
+    A rate with an empty denominator is nan, not 0.
     """
-    raise NotImplementedError("Implement group_metrics()")
+    def rate(num: int, den: int) -> float:
+        # An empty denominator means the rate is undefined, not zero.
+        return num / den if den else np.nan
+
+    rows = []
+    for group, part in df.groupby(group_col, sort=True):
+        c = confusion_counts(part[y_true_col], part[y_pred_col])
+        n = len(part)
+        tpr = rate(c["tp"], c["tp"] + c["fn"])
+        rows.append({
+            "group": group,
+            "n": n,
+            "base_rate": rate(c["tp"] + c["fn"], n),
+            "positive_rate": rate(c["tp"] + c["fp"], n),
+            "tpr": tpr,
+            "fpr": rate(c["fp"], c["fp"] + c["tn"]),
+            "fnr": 1 - tpr,
+            "precision": rate(c["tp"], c["tp"] + c["fp"]),
+        })
+    return pd.DataFrame(rows)
 
 
 def disparate_impact_ratio(rates: pd.Series) -> float:
-    """
-    TODO 3 — the four-fifths ratio: the lowest rate divided by the highest.
-
-    Ignore nan rates. Returns a number in [0, 1], where 1.0 is exact parity.
-    """
-    raise NotImplementedError("Implement disparate_impact_ratio()")
+    """Lowest rate divided by highest, ignoring nan; 1.0 is exact parity."""
+    known = pd.Series(rates).dropna()
+    if known.empty or known.max() == 0:
+        return np.nan
+    return float(known.min() / known.max())
 
 
 def passes_80_percent_rule(ratio: float) -> bool:
-    """
-    TODO 4 — True when the ratio clears the EEOC four-fifths guideline.
-
-    Careful with the boundary: exactly 0.80 passes.
-    """
-    raise NotImplementedError("Implement passes_80_percent_rule()")
+    """True when the ratio clears the EEOC four-fifths guideline (0.80 passes)."""
+    return bool(ratio >= 0.80)
 
 
 def blind_model_comparison(df: pd.DataFrame) -> pd.DataFrame:
     """
-    TODO 5 — retrain without the demographic columns and re-audit.
+    Retrain the same pipeline without PROTECTED_COLUMNS on the same training
+    split, then compare disparate impact ratios with and without them.
 
-    `df` arrives with y_true / y_pred already on it from the full model. Score
-    the blind model yourself rather than reusing those columns, so the two
-    numbers you compare come from two actual models.
-
-    Steps:
-      - take the fitted pipeline's feature list, drop PROTECTED_COLUMNS
-      - build and fit a pipeline of the same shape on the same training split
-      - score, threshold, and run group_metrics() again per protected column
-      - return a DataFrame with one row per protected column and the disparate
-        impact ratio with the demographic features and without, side by side
-
-    Predict the result before you run it, in one sentence: ____________________
-
-    Most students expect the disparity to disappear. Whatever you find, the
-    interesting question is *why*. Which remaining columns carry the same
-    information the demographic columns did? Check with:
-        df.groupby("sex")[numeric_cols].mean()
+    `df` must already carry y_true and y_pred from the full model.
     """
-    raise NotImplementedError("Implement blind_model_comparison()")
+    full = joblib.load(MODEL_PATH)
+    features = list(full["preprocessor"].feature_names_in_)
+    blind_features = [f for f in features if f not in PROTECTED_COLUMNS]
+
+    # Same pipeline shape, minus the protected columns in each transformer.
+    blind = clone(full)
+    blind.set_params(preprocessor__transformers=[
+        (name, transformer, [c for c in cols if c not in PROTECTED_COLUMNS])
+        for name, transformer, cols in full["preprocessor"].transformers
+        if [c for c in cols if c not in PROTECTED_COLUMNS]
+    ])
+
+    y = df["y_true"]
+    X_train, _, y_train, _ = train_test_split(
+        df[blind_features], y, test_size=TEST_SIZE, stratify=y, random_state=RANDOM_STATE
+    )
+    blind.fit(X_train, y_train)
+
+    blind_scored = df.assign(
+        y_pred=(blind.predict_proba(df[blind_features])[:, 1] >= DECISION_THRESHOLD).astype(int)
+    )
+
+    rows = []
+    for col in PROTECTED_COLUMNS:
+        with_demo = disparate_impact_ratio(group_metrics(df, col).set_index("group")["positive_rate"])
+        without = disparate_impact_ratio(
+            group_metrics(blind_scored, col).set_index("group")["positive_rate"]
+        )
+        rows.append({
+            "protected_column": col,
+            "di_ratio_with_demographics": round(with_demo, 3),
+            "di_ratio_blind": round(without, 3),
+            "passes_80_with": passes_80_percent_rule(with_demo),
+            "passes_80_blind": passes_80_percent_rule(without),
+        })
+    return pd.DataFrame(rows)
 
 
 def main() -> None:
