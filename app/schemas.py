@@ -12,7 +12,7 @@ Check your work:
 """
 
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class MemberFeatures(BaseModel):
@@ -41,8 +41,27 @@ class MemberFeatures(BaseModel):
     them sending medical_claims=5 with total_claims=1.
     """
 
-    # TODO: replace this line with your fields.
-    ...
+    model_config = ConfigDict(extra="forbid")
+
+    age_bucket: Literal["18-29", "30-39", "40-49", "50-59", "60-64"]
+    sex: Literal["F", "M"]
+    region: Literal["Midwest", "Northeast", "Southeast", "Southwest", "West"]
+    total_claims: int = Field(ge=0, description="Approved claims so far this plan year")
+    specialty_drug_fills: int = Field(ge=0, description="Approved specialty-drug fills")
+    inpatient_claims: int = Field(ge=0, description="Approved institutional (inpatient) claims")
+    has_specialty_drug: bool
+
+    @model_validator(mode="after")
+    def check_consistency(self):
+        # Cross-field rules that Field() alone cannot express. Raising here
+        # turns into a 422 instead of a confident probability for nonsense.
+        if self.specialty_drug_fills > self.total_claims:
+            raise ValueError("specialty_drug_fills cannot exceed total_claims")
+        if self.inpatient_claims > self.total_claims:
+            raise ValueError("inpatient_claims cannot exceed total_claims")
+        if self.has_specialty_drug != (self.specialty_drug_fills > 0):
+            raise ValueError("has_specialty_drug must be true exactly when specialty_drug_fills > 0")
+        return self
 
 
 class PredictionResponse(BaseModel):
@@ -58,5 +77,6 @@ class PredictionResponse(BaseModel):
     a different threshold and a caller has a number with no idea what it means.
     """
 
-    # TODO: replace this line with your fields.
-    ...
+    is_high_cost: bool
+    probability: float = Field(ge=0.0, le=1.0)
+    threshold_dollars: int
