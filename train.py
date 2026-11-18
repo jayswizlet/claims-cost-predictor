@@ -40,26 +40,17 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from config import HIGH_COST_THRESHOLD_USD
+from features import model_features
 
 DATA_PATH = Path("data/member_summary.csv")
 
 CATEGORICAL_FEATURES = ["age_bucket", "sex", "region"]
 
-# Every numeric column in member_summary.csv, as generated. Some of these belong
-# in a model and some do not — that is your call to make, not the dataset's.
-NUMERIC_FEATURES = [
-    "total_claims",
-    "medical_claims",
-    "pharmacy_claims",
-    "specialty_drug_fills",
-    "total_billed_cents",
-    "total_allowed_cents",
-    "total_plan_paid_cents",
-    "total_oop_cents",
-    "unique_diagnosis_codes",
-    "inpatient_claims",
-    "has_specialty_drug",
-]
+# The numeric features come from the feature audit in features.py, so changing a
+# verdict there changes what the model trains on. The original list held every
+# numeric column, including total_plan_paid_cents (which defines the label) and
+# total_allowed_cents, both of which restate the outcome.
+NUMERIC_FEATURES = [c for c in model_features() if c not in CATEGORICAL_FEATURES]
 TARGET = "is_high_cost"
 
 TEST_SIZE = 0.2
@@ -95,7 +86,19 @@ def build_pipeline() -> Pipeline:
         https://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html
         https://scikit-learn.org/stable/modules/generated/sklearn.compose.ColumnTransformer.html
     """
-    raise NotImplementedError("Implement build_pipeline()")
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("categorical", OneHotEncoder(handle_unknown="ignore"), CATEGORICAL_FEATURES),
+            ("numeric", StandardScaler(), NUMERIC_FEATURES),
+        ]
+    )
+    classifier = RandomForestClassifier(
+        n_estimators=300,
+        class_weight="balanced",  # positives are rare; weight them up
+        random_state=RANDOM_STATE,
+        n_jobs=-1,
+    )
+    return Pipeline([("preprocessor", preprocessor), ("classifier", classifier)])
 
 
 def main():
@@ -111,7 +114,9 @@ def main():
     #   - Stratify on y so the rare positive class is represented in both splits
     #   - Use random_state=RANDOM_STATE for reproducibility
     # Replace the line below with your implementation.
-    X_train, X_test, y_train, y_test = None, None, None, None
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=TEST_SIZE,stratify=y,random_state=RANDOM_STATE
+    )
 
     pipeline = build_pipeline()
     pipeline.fit(X_train, y_train)
@@ -120,20 +125,28 @@ def main():
     #   - Compute the predicted class labels (y_pred)
     #   - Compute the predicted probability of the positive class (y_proba)
     # Hint: pipeline.predict(...) and pipeline.predict_proba(...)[:, 1]
-    y_pred = None
-    y_proba = None
+    y_pred = pipeline.predict(X_test)
+    y_proba = pipeline.predict_proba(X_test)[:, 1]
 
     print("\n=== Test Set Results ===")
     # TODO 4: Print the classification_report comparing y_test and y_pred.
     # Use target_names=["Normal", "High Cost"] so the output is readable.
+    print(classification_report(y_test, y_pred, target_names=["Normal", "High Cost"]))
 
     # TODO 5: Print the ROC-AUC score using y_test and y_proba.
+    print(f"ROC-AUC: {roc_auc_score(y_test, y_proba):.4f}")
 
     # TODO 6 (do this one last): print the 5 features the model leaned on most.
     #   feature_names = pipeline["preprocessor"].get_feature_names_out()
     #   importances = pipeline["classifier"].feature_importances_
     # Sort them together and print the top 5. If one feature dominates every
     # other feature combined, that is worth explaining before you move on.
+    feature_names = pipeline["preprocessor"].get_feature_names_out()
+    importances = pipeline["classifier"].feature_importances_
+    order = np.argsort(importances)[::-1][:5]
+    print("\nTop 5 features:")
+    for i in order:
+        print(f"  {feature_names[i]:35s} {importances[i]:.4f}")
 
     joblib.dump(pipeline, "model.joblib")
     print("\nModel saved to model.joblib")
