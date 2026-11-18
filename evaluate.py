@@ -27,8 +27,8 @@ RANDOM_STATE = 42
 VALID_USE_CASES = ("care_management", "stop_loss", "pricing")
 
 # TODO: set the use case, threshold and justification.
-CHOSEN_USE_CASE = "TODO"
-CHOSEN_THRESHOLD = None
+CHOSEN_USE_CASE = "care_management"
+CHOSEN_THRESHOLD = 0.15
 THRESHOLD_JUSTIFICATION = ""
 
 # Rough care-management economics, in dollars.
@@ -59,7 +59,8 @@ def threshold_sweep(y_true, y_proba, thresholds=None) -> pd.DataFrame:
     0.95). A member is flagged when y_proba >= threshold.
     """
     if thresholds is None:
-        thresholds = np.arange(0.05, 1.0, 0.05)
+        # Round so 0.15 is exactly 0.15, matching the threshold the API compares against.
+        thresholds = np.round(np.arange(0.05, 1.0, 0.05), 2)
     y_true = np.asarray(y_true).astype(int)
     y_proba = np.asarray(y_proba)
 

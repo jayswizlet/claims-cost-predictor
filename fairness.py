@@ -26,7 +26,7 @@ TEST_SIZE = 0.2
 RANDOM_STATE = 42
 
 PROTECTED_COLUMNS = ["sex", "age_bucket"]
-DECISION_THRESHOLD = 0.2  # keep in sync with evaluate.CHOSEN_THRESHOLD
+DECISION_THRESHOLD = 0.15  # keep in sync with evaluate.CHOSEN_THRESHOLD
 
 # TODO: write the assessment from this cohort's numbers.
 ASSESSMENT = ""
