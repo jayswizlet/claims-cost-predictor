@@ -14,11 +14,8 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # One Week 4 test fails from day one by design (see README). CI sets it
-      # aside so a green tick means "everything I have written so far works".
-      # You switch it on in Week 4.
-      PYTEST_ADDOPTS: >-
-        --deselect tests/test_leakage.py::test_training_features_are_leak_free
+      # Same cohort the model was audited on locally and deployed with on Render.
+      STUDENT_SEED: "4"
 
     steps:
       - uses: actions/checkout@v4
@@ -65,5 +62,12 @@ jobs:
       # runs on the PR itself, so you will see whether you got it right before
       # anything reaches main.
       # -------------------------------------------------------------------
+      # model.joblib and data/ are gitignored, so build them here the same way
+      # Render does. Without this every model-dependent test would skip.
+      - name: Generate data and train the model
+        run: |
+          python generate_claims_data.py
+          python train.py
+
       - name: Run the test suite
         run: pytest tests/
