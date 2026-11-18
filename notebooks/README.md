@@ -9,3 +9,6 @@ engineering, training, evaluation — belongs in the `.py` files at the repo roo
 is where the tests can reach it.
 
 Commit your notebooks. `.ipynb_checkpoints/` is already gitignored.
+
+##Week 1: Initial Commit
+Assigned Seed: 4
