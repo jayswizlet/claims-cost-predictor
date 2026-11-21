@@ -23,7 +23,7 @@ from app.schemas import MemberFeatures, PredictionResponse
 from config import HIGH_COST_THRESHOLD_USD
 
 MODEL_PATH = Path("model.joblib")
-DECISION_THRESHOLD = 0.2  # the threshold you defended in Week 5
+DECISION_THRESHOLD = 0.15  # the threshold you defended in Week 5
 
 model = None
 
@@ -63,14 +63,7 @@ app = FastAPI(
 
 @app.get("/health")
 def health():
-    """
-    TODO 2 — return {"status": "ok", "model_loaded": <bool>}.
-
-    Render polls this endpoint to decide whether your service is alive, so it
-    must not do any real work. Report whether the model actually loaded rather
-    than hard-coding True; "the process is up" and "the service can serve" are
-    different claims.
-    """
+    """Liveness check for Render: cheap, and reports whether the model actually loaded."""
     return {"status": "ok", "model_loaded": model is not None}
 
 

@@ -26,10 +26,20 @@ RANDOM_STATE = 42
 
 VALID_USE_CASES = ("care_management", "stop_loss", "pricing")
 
-# TODO: set the use case, threshold and justification.
-CHOSEN_USE_CASE = "TODO"
-CHOSEN_THRESHOLD = None
-THRESHOLD_JUSTIFICATION = ""
+CHOSEN_USE_CASE = "care_management"
+CHOSEN_THRESHOLD = 0.15
+THRESHOLD_JUSTIFICATION = (
+    "Care management, because outreach is the use case where acting on a flag is cheap and "
+    "helps the member; stop-loss and pricing would push the cost of a wrong score onto the "
+    "employer or the member. "
+    "On the 400-member holdout, 0.15 nets $72,250 against $73,000 at 0.05, the net-dollar "
+    "maximum, but flags 63 members instead of 92: 29 fewer nurse calls for $750 less, and "
+    "nurse capacity is the real constraint. It also keeps 0.10's recall (22 of 27, 0.81) "
+    "with 10 fewer flags. "
+    "The economics are lopsided: a false positive costs one $250 outreach, while a miss gives "
+    "up about $4,000 in savings, so going higher than 0.15 loses money fast (0.20 misses two "
+    "more members and nets $66,250)."
+)
 
 # Rough care-management economics, in dollars.
 OUTREACH_COST_PER_FLAGGED = 250
@@ -59,7 +69,8 @@ def threshold_sweep(y_true, y_proba, thresholds=None) -> pd.DataFrame:
     0.95). A member is flagged when y_proba >= threshold.
     """
     if thresholds is None:
-        thresholds = np.arange(0.05, 1.0, 0.05)
+        # Round so 0.15 is exactly 0.15, matching the threshold the API compares against.
+        thresholds = np.round(np.arange(0.05, 1.0, 0.05), 2)
     y_true = np.asarray(y_true).astype(int)
     y_proba = np.asarray(y_proba)
 
