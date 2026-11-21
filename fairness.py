@@ -28,8 +28,29 @@ RANDOM_STATE = 42
 PROTECTED_COLUMNS = ["sex", "age_bucket"]
 DECISION_THRESHOLD = 0.15  # keep in sync with evaluate.CHOSEN_THRESHOLD
 
-# TODO: write the assessment from this cohort's numbers.
-ASSESSMENT = ""
+ASSESSMENT = """\
+Sex passes the four-fifths rule (disparate impact 0.941; F flagged 11.7%, M 11.0%).
+
+Age fails it badly. Members aged 60-64 are flagged 21.5% of the time against 5.4% for
+18-29, a ratio of 0.250. The gap follows real need: the high-cost base rate climbs from
+2.5% to 10.7% across the same buckets, and the share of members on a specialty drug goes
+from 7.6% to 29.3%.
+
+Blinding the model to age doesn't fix it (0.250 with age, 0.256 without), because claims
+features such as specialty drug use carry most of the age signal. Removing the column
+hides the attribute without changing who gets flagged.
+
+For care-management outreach, catching the members who will need help matters more than
+equal flag rates, and the catch rate (TPR) is 0.94 or higher in every age group, so the
+model isn't systematically missing any age band. Equal flag rates would mean either
+under-calling older members who will need help or calling many more younger members who
+won't.
+
+Caveats: the youngest groups hold few high-cost members (about 8 in 18-29 and 17 in
+30-39), so their rates are noisy. The audit also scores all 2,000 members, including the
+rows the model was trained on, so these catch rates are optimistic; the holdout recall at
+this threshold is 0.81.
+"""
 
 
 def confusion_counts(y_true, y_pred) -> dict[str, int]:
